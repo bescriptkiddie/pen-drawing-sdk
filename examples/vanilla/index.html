@@ -1,0 +1,150 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Pen SDK 示例 - 原生HTML</title>
+    <style>
+      body {
+        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto,
+          Oxygen, Ubuntu, Cantarell, "Open Sans", "Helvetica Neue", sans-serif;
+        max-width: 1000px;
+        margin: 0 auto;
+        padding: 20px;
+      }
+      h1 {
+        text-align: center;
+        color: #333;
+      }
+      #drawing-board {
+        border: 1px solid #ddd;
+        border-radius: 5px;
+        box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
+        background-color: #fff;
+        touch-action: none; /* 防止触摸设备上的滚动手势 */
+      }
+      .toolbar {
+        margin: 20px 0;
+        display: flex;
+        gap: 10px;
+        align-items: center;
+        flex-wrap: wrap;
+      }
+      button,
+      select {
+        padding: 8px 15px;
+        background-color: #4a90e2;
+        color: white;
+        border: none;
+        border-radius: 4px;
+        cursor: pointer;
+        transition: background-color 0.2s;
+      }
+      button:hover {
+        background-color: #3a7bc8;
+      }
+      select {
+        background-color: #fff;
+        color: #333;
+        border: 1px solid #ddd;
+      }
+      .size-control {
+        display: flex;
+        align-items: center;
+        gap: 5px;
+      }
+      .size-label {
+        min-width: 40px;
+      }
+    </style>
+  </head>
+  <body>
+    <h1>Pen SDK 示例</h1>
+
+    <div class="toolbar">
+      <button id="pen-tool">钢笔</button>
+      <button id="eraser-tool">橡皮擦</button>
+      <button id="chalk-tool">粉笔</button>
+      <div class="size-control">
+        <span class="size-label">尺寸:</span>
+        <input type="range" id="size-slider" min="1" max="30" value="5" />
+        <span id="size-value">5</span>
+      </div>
+      <button id="undo">撤销</button>
+      <button id="redo">重做</button>
+      <button id="clear">清空</button>
+      <select id="mode-select">
+        <option value="pen">触控笔</option>
+        <option value="mouse">鼠标</option>
+      </select>
+      <button id="export-logs">导出日志</button>
+    </div>
+
+    <canvas id="drawing-board" width="1000" height="600"></canvas>
+
+    <!-- 使用UMD构建 -->
+    <script src="../../dist/pen-sdk.umd.js"></script>
+    <script>
+      document.addEventListener("DOMContentLoaded", () => {
+        // 初始化绘图板
+        const drawingBoard = new PenSDK.DrawingBoard("drawing-board")
+
+        // 工具选择
+        document.getElementById("pen-tool").addEventListener("click", () => {
+          drawingBoard.setTool("pen")
+          updateSize()
+        })
+
+        document.getElementById("eraser-tool").addEventListener("click", () => {
+          drawingBoard.setTool("eraser")
+          updateSize()
+        })
+
+        document.getElementById("chalk-tool").addEventListener("click", () => {
+          drawingBoard.setTool("chalk")
+          updateSize()
+        })
+
+        // 尺寸调整
+        const sizeSlider = document.getElementById("size-slider")
+        const sizeValue = document.getElementById("size-value")
+
+        function updateSize() {
+          const size = parseInt(sizeSlider.value)
+          sizeValue.textContent = size
+          drawingBoard.setToolSize(size)
+        }
+
+        sizeSlider.addEventListener("input", updateSize)
+
+        // 历史操作
+        document.getElementById("undo").addEventListener("click", () => {
+          drawingBoard.undo()
+        })
+
+        document.getElementById("redo").addEventListener("click", () => {
+          drawingBoard.redo()
+        })
+
+        document.getElementById("clear").addEventListener("click", () => {
+          drawingBoard.clear()
+        })
+
+        // 模式切换
+        const modeSelect = document.getElementById("mode-select")
+        modeSelect.addEventListener("change", () => {
+          const currentMode = drawingBoard.toggleInputMode()
+          modeSelect.value = currentMode
+        })
+
+        // 导出日志
+        document.getElementById("export-logs").addEventListener("click", () => {
+          drawingBoard.exportLogs()
+        })
+
+        // 初始设置
+        updateSize()
+      })
+    </script>
+  </body>
+</html>

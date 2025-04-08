@@ -409,3 +409,17 @@ class DrawingBoard {
 
 // 自动挂载（示例）
 window.drawingBoard = new DrawingBoard("drawing-board")
+
+// 导出所有主要类和工具
+export { DrawingBoard } // 直接导出当前文件中定义的DrawingBoard类
+export { Stroke } from "./tools/Stroke.js"
+export { ToolManager } from "./tools/ToolManager.js"
+export { CanvasRenderer } from "./renderer/CanvasRenderer.js"
+export { PreviewRenderer } from "./renderer/PreviewRenderer.js"
+export { PathSmoother } from "./utils/PathSmoother.js"
+
+// 导出辅助工具和函数
+export {
+  getDevicePixelRatio,
+  measureDevicePerformance
+} from "./utils/device.js"

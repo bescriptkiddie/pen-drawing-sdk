@@ -1,0 +1,32 @@
+{
+  "name": "pen-drawing-sdk",
+  "version": "1.0.0",
+  "description": "高性能绘图库，支持压力感应和轨迹平滑",
+  "main": "dist/pen-sdk.cjs.js",
+  "module": "dist/pen-sdk.esm.js",
+  "browser": "dist/pen-sdk.umd.js",
+  "types": "dist/index.d.ts",
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "rollup -c",
+    "dev": "rollup -c -w",
+    "prepublishOnly": "npm run build"
+  },
+  "keywords": [
+    "drawing",
+    "canvas",
+    "pen",
+    "stylus",
+    "sketching"
+  ],
+  "author": "bescriptkiddie",
+  "license": "MIT",
+  "devDependencies": {
+    "@rollup/plugin-commonjs": "^21.0.1",
+    "@rollup/plugin-node-resolve": "^13.1.3",
+    "rollup": "^2.67.2",
+    "rollup-plugin-terser": "^7.0.2"
+  }
+}
