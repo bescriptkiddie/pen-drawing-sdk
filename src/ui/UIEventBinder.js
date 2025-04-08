@@ -9,6 +9,12 @@
 export function bindUIEvents({ drawingBoard, container = document }) {
   const tools = ["pen", "eraser", "chalk"]
 
+  const updateSlider = () => {
+    const size = drawingBoard.getToolSize()
+    sizeSlider.value = size
+    sizeValue.textContent = size
+  }
+
   tools.forEach((tool) => {
     const btn = container.getElementById(`${tool}-tool`)
     if (btn) {
@@ -49,12 +55,6 @@ export function bindUIEvents({ drawingBoard, container = document }) {
       drawingBoard.setToolSize(size)
     })
 
-    const updateSlider = () => {
-      const size = drawingBoard.getToolSize()
-      sizeSlider.value = size
-      sizeValue.textContent = size
-    }
-
     updateSlider()
     tools.forEach((tool) => {
       const btn = container.getElementById(`${tool}-tool`)
@@ -79,6 +79,16 @@ export function bindUIEvents({ drawingBoard, container = document }) {
       a.click()
 
       URL.revokeObjectURL(url)
+    }
+  })
+
+  // 绑定模拟低帧率复选框事件
+  const simulateLowFPS = container.getElementById("simulate-lowfps")
+  simulateLowFPS?.addEventListener("change", (e) => {
+    if (drawingBoard.simulateLowFPS) {
+      drawingBoard.simulateLowFPS(e.target.checked)
+    } else {
+      console.warn("DrawingBoard 中未实现 simulateLowFPS 方法")
     }
   })
 }

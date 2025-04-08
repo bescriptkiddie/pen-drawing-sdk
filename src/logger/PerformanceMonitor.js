@@ -12,6 +12,20 @@ export class PerformanceMonitor {
     this._frameCount = 0
     this._lastFrameTime = performance.now()
     this._active = false
+    this._fpsCallbacks = []
+    this._lastFpsCheck = 0
+    this._checkInterval = 2000
+    this._currentFps = 60
+  }
+
+  /**
+   * 注册FPS变化的回调函数
+   * @param {function} callback - 当FPS变化时调用的回调，参数为当前FPS
+   */
+  onFpsChange(callback) {
+    if (typeof callback === "function") {
+      this._fpsCallbacks.push(callback)
+    }
   }
 
   /**
@@ -29,10 +43,18 @@ export class PerformanceMonitor {
       if (delta >= 1000) {
         const fps = Math.round((this._frameCount * 1000) / delta)
         this.frameRates.push(fps)
+        this._currentFps = fps
+
         if (fps < 30) {
           this.droppedFrames++
           this.logger?.warn("低帧率检测", { fps })
         }
+
+        if (now - this._lastFpsCheck > this._checkInterval) {
+          this._lastFpsCheck = now
+          this._notifyFpsCallbacks(fps)
+        }
+
         this._frameCount = 0
         this._lastFrameTime = now
       }
@@ -43,6 +65,27 @@ export class PerformanceMonitor {
     }
 
     requestAnimationFrame(loop)
+  }
+
+  /**
+   * 通知所有FPS变化回调
+   * @private
+   */
+  _notifyFpsCallbacks(fps) {
+    for (const callback of this._fpsCallbacks) {
+      try {
+        callback(fps)
+      } catch (e) {
+        this.logger?.error("FPS回调异常", e)
+      }
+    }
+  }
+
+  /**
+   * 获取当前估计的FPS
+   */
+  getCurrentFps() {
+    return this._currentFps
   }
 
   /**

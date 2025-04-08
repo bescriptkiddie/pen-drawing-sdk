@@ -53,6 +53,23 @@
         <span id="size-value">3</span>
       </label>
 
+      <label>
+        <input type="checkbox" id="simulate-lowfps" />
+        模拟低帧率模式
+      </label>
+
+      <label>
+        插值精度：
+        <input
+          type="range"
+          id="smooth-steps-slider"
+          min="1"
+          max="8"
+          value="4"
+        />
+        <span id="smooth-steps-label">4</span>
+      </label>
+
       <button id="undo">↩️ 撤销</button>
       <button id="redo">↪️ 重做</button>
       <button id="clear">🗑️ 清空</button>
