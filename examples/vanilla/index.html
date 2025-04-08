@@ -3,86 +3,86 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Pen SDK 示例 - 原生HTML</title>
+    <title>DrawingBoard Demo</title>
     <style>
       body {
-        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto,
-          Oxygen, Ubuntu, Cantarell, "Open Sans", "Helvetica Neue", sans-serif;
-        max-width: 1000px;
-        margin: 0 auto;
-        padding: 20px;
+        margin: 0;
+        font-family: sans-serif;
+        background: #f0f0f0;
       }
-      h1 {
-        text-align: center;
-        color: #333;
-      }
-      #drawing-board {
-        border: 1px solid #ddd;
-        border-radius: 5px;
-        box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
-        background-color: #fff;
-        touch-action: none; /* 防止触摸设备上的滚动手势 */
-      }
-      .toolbar {
-        margin: 20px 0;
+
+      #toolbar {
+        padding: 10px;
+        background: #222;
+        color: white;
         display: flex;
         gap: 10px;
         align-items: center;
-        flex-wrap: wrap;
       }
-      button,
-      select {
-        padding: 8px 15px;
-        background-color: #4a90e2;
-        color: white;
-        border: none;
-        border-radius: 4px;
-        cursor: pointer;
-        transition: background-color 0.2s;
+
+      #toolbar button,
+      #toolbar input[type="range"] {
+        font-size: 14px;
+        padding: 4px 8px;
       }
-      button:hover {
-        background-color: #3a7bc8;
+
+      #drawing-board {
+        border: 1px solid #ccc;
+        width: 100vw;
+        height: calc(100vh - 50px);
+        display: block;
+        touch-action: none;
       }
-      select {
-        background-color: #fff;
-        color: #333;
-        border: 1px solid #ddd;
-      }
-      .size-control {
-        display: flex;
-        align-items: center;
-        gap: 5px;
-      }
-      .size-label {
-        min-width: 40px;
+
+      #size-value {
+        width: 30px;
+        display: inline-block;
+        text-align: center;
       }
     </style>
   </head>
   <body>
-    <h1>Pen SDK 示例</h1>
+    <div id="toolbar">
+      <button id="pen-tool">✏️ 笔</button>
+      <button id="chalk-tool">🧽 粉笔</button>
+      <button id="eraser-tool">🩹 橡皮</button>
 
-    <div class="toolbar">
-      <button id="pen-tool">钢笔</button>
-      <button id="eraser-tool">橡皮擦</button>
-      <button id="chalk-tool">粉笔</button>
-      <div class="size-control">
-        <span class="size-label">尺寸:</span>
-        <input type="range" id="size-slider" min="1" max="30" value="5" />
-        <span id="size-value">5</span>
-      </div>
-      <button id="undo">撤销</button>
-      <button id="redo">重做</button>
-      <button id="clear">清空</button>
-      <select id="mode-select">
-        <option value="pen">触控笔</option>
-        <option value="mouse">鼠标</option>
-      </select>
-      <button id="export-logs">导出日志</button>
+      <label
+        >线宽：
+        <input type="range" id="size-slider" min="1" max="30" value="3" />
+        <span id="size-value">3</span>
+      </label>
+
+      <label>
+        <input type="checkbox" id="simulate-lowfps" />
+        模拟低帧率模式
+      </label>
+
+      <label>
+        插值精度：
+        <input
+          type="range"
+          id="smooth-steps-slider"
+          min="1"
+          max="8"
+          value="4"
+        />
+        <span id="smooth-steps-label">4</span>
+      </label>
+
+      <button id="undo">↩️ 撤销</button>
+      <button id="redo">↪️ 重做</button>
+      <button id="clear">🗑️ 清空</button>
+
+      <button id="input-mode-toggle">🖱️ 切换模式</button>
+      <span id="input-mode-text">触控笔模式</span>
+
+      <button id="export-logs">📦 导出日志</button>
+      <button id="export-analysis">📊 分析报告</button>
     </div>
 
-    <canvas id="drawing-board" width="1000" height="600"></canvas>
+    <canvas id="drawing-board"></canvas>
 
-    <!-- 使用UMD构建 -->
     <script src="../../dist/pen-sdk.umd.js"></script>
     <script>
       document.addEventListener("DOMContentLoaded", () => {
