@@ -28,7 +28,7 @@ class DrawingBoard {
     this.ctx.scale(this.dpr, this.dpr)
 
     // 初始化模块
-    this.logger = new Logger("DrawingBoard", "info")
+    this.logger = new Logger("DrawingBoard", "debug")
     this.toolManager = new ToolManager()
     this.stylusAdapter = new StylusAdapter()
     this.renderer = new CanvasRenderer(this.ctx, this.dpr)
@@ -58,90 +58,17 @@ class DrawingBoard {
       this.stylusAdapter.mapPressure(e)
     )
 
+    // 关键修复：必须在这里绑定绘图事件，否则无法捕获笔画
     this._bindEvents()
     this.monitor.start()
-    this._initRendererAndUI()
 
     this.canvasId = canvasId
     this.inputMode = "pen"
+
+    // 初始化历史记录 - 添加空白画布状态作为第一个历史记录
+    this._saveToHistory()
+
     this._initRendererAndUI()
-  }
-
-  async _initRendererAndUI() {
-    const { score } = await measureDevicePerformance()
-    const fps = this.monitor?.exportMetrics?.().avgFps || 60
-
-    this.lowPerformance = score < 0.6 || fps < 30
-    this.logger?.info?.("性能评分", { score, fps })
-
-    const smoothSteps = fps < 30 ? 2 : 4
-
-    this.renderer = new CanvasRenderer(this.ctx, this.dpr, {
-      lowFPS: this.lowPerformance,
-      smoothSteps
-    })
-
-    this.preview = new PreviewRenderer(this.ctx, {
-      lowFPS: this.lowPerformance,
-      smoothSteps
-    })
-
-    // 监控FPS变化，动态调整渲染质量
-    this.monitor.onFpsChange((currentFps) => {
-      if (currentFps < 28 && !this.lowPerformance) {
-        this.lowPerformance = true
-        this.logger?.info("自动切换到低帧率模式", { fps: currentFps })
-
-        // 动态更新渲染器设置
-        this.renderer.lowFPS = true
-        this.preview.lowFPS = true
-        this.preview.smoothSteps = 2
-        this.renderer.smoothSteps = 2
-      } else if (currentFps > 45 && this.lowPerformance) {
-        // 如果性能恢复，切回高质量模式
-        this.lowPerformance = false
-        this.logger?.info("恢复正常渲染模式", { fps: currentFps })
-
-        // 动态更新渲染器设置
-        this.renderer.lowFPS = false
-        this.preview.lowFPS = false
-        this.preview.smoothSteps = 4
-        this.renderer.smoothSteps = 4
-      }
-    })
-
-    this.stylusProfile = "default"
-    this.setStylusProfile = (name) => {
-      this.stylusProfile = name
-      this.stylusAdapter?.useProfile?.(name)
-    }
-
-    // 🛠 Debug 日志输出 pointer event
-    this._debugEvent = (e) => {
-      console.log("PointerEvent:", {
-        type: e.type,
-        pointerType: e.pointerType,
-        pressure: e.pressure,
-        tiltX: e.tiltX,
-        tiltY: e.tiltY,
-        x: e.clientX,
-        y: e.clientY
-      })
-    }
-
-    const originalDown = this._onPointerDown?.bind(this)
-    this._onPointerDown = (e) => {
-      this._debugEvent(e)
-      if (this.inputMode === "pen" && e.pointerType !== "pen") return
-      const pressure = e.pressure > 0 ? e.pressure : 0.5
-      e._patchedPressure = pressure
-      originalDown?.(e)
-    }
-
-    this._bindEvents()
-    this.monitor?.start?.()
-    bindUIEvents({ drawingBoard: this })
-    this.logger?.info?.("初始化完成")
   }
 
   _bindEvents() {
@@ -151,7 +78,9 @@ class DrawingBoard {
       onPointerUp: this._onPointerUp.bind(this)
     })
 
-    bindUIEvents({ drawingBoard: this })
+    // 将UI事件绑定移动到这里的调用会导致重复绑定
+    // 因为在_initRendererAndUI中也调用了bindUIEvents
+    // bindUIEvents({ drawingBoard: this })
   }
 
   _onPointerDown(event) {
@@ -233,23 +162,71 @@ class DrawingBoard {
     }
     this.history.push(copy)
     this.historyIndex = this.history.length - 1
+
+    // 添加调试日志
+    this.logger?.debug("保存历史记录", {
+      历史索引: this.historyIndex,
+      历史记录数: this.history.length,
+      当前笔画数: this.strokes.length
+    })
   }
 
   undo() {
-    if (this.historyIndex > 0) {
+    // 完全重新设计撤销功能
+    this.logger?.debug("准备撤销", {
+      历史索引: this.historyIndex,
+      历史记录数: this.history.length,
+      当前笔画数: this.strokes.length
+    })
+
+    // 修改撤销条件：允许回到索引0（空白画布状态）
+    if (this.history.length > 0 && this.historyIndex > 0) {
+      // 关键变化：不是修改当前状态，而是回到前一个历史状态
       this.historyIndex--
+
+      // 从历史记录中恢复笔画状态
       this.strokes = this.history[this.historyIndex].map((s) => s.clone())
+
+      this.logger?.debug("撤销完成", {
+        回退到历史索引: this.historyIndex,
+        恢复后笔画数: this.strokes.length,
+        撤销前索引: this.historyIndex + 1,
+        撤销前笔画数: this.history[this.historyIndex + 1].length
+      })
+
+      // 重新渲染画布
       this.renderer.clearCanvas(this.canvas.width, this.canvas.height)
       this.renderer.renderStrokes(this.strokes)
+    } else {
+      this.logger?.debug("无法撤销 - 没有更早的历史记录", {
+        历史索引: this.historyIndex,
+        历史长度: this.history.length
+      })
     }
   }
 
   redo() {
+    this.logger?.debug("准备重做", {
+      历史索引: this.historyIndex,
+      历史记录数: this.history.length
+    })
+
     if (this.historyIndex < this.history.length - 1) {
       this.historyIndex++
       this.strokes = this.history[this.historyIndex].map((s) => s.clone())
+
+      this.logger?.debug("重做完成", {
+        前进到历史索引: this.historyIndex,
+        恢复后笔画数: this.strokes.length
+      })
+
       this.renderer.clearCanvas(this.canvas.width, this.canvas.height)
       this.renderer.renderStrokes(this.strokes)
+    } else {
+      this.logger?.debug("无法重做 - 已是最新状态", {
+        历史索引: this.historyIndex,
+        历史长度: this.history.length
+      })
     }
   }
 
@@ -348,6 +325,85 @@ class DrawingBoard {
         jitterThreshold: 2.0
       })
     }
+  }
+
+  async _initRendererAndUI() {
+    const { score } = await measureDevicePerformance()
+    const fps = this.monitor?.exportMetrics?.().avgFps || 60
+
+    this.lowPerformance = score < 0.6 || fps < 30
+    this.logger?.info?.("性能评分", { score, fps })
+
+    const smoothSteps = fps < 30 ? 2 : 4
+
+    this.renderer = new CanvasRenderer(this.ctx, this.dpr, {
+      lowFPS: this.lowPerformance,
+      smoothSteps
+    })
+
+    this.preview = new PreviewRenderer(this.ctx, {
+      lowFPS: this.lowPerformance,
+      smoothSteps
+    })
+
+    // 监控FPS变化，动态调整渲染质量
+    this.monitor.onFpsChange((currentFps) => {
+      if (currentFps < 28 && !this.lowPerformance) {
+        this.lowPerformance = true
+        this.logger?.info("自动切换到低帧率模式", { fps: currentFps })
+
+        // 动态更新渲染器设置
+        this.renderer.lowFPS = true
+        this.preview.lowFPS = true
+        this.preview.smoothSteps = 2
+        this.renderer.smoothSteps = 2
+      } else if (currentFps > 45 && this.lowPerformance) {
+        // 如果性能恢复，切回高质量模式
+        this.lowPerformance = false
+        this.logger?.info("恢复正常渲染模式", { fps: currentFps })
+
+        // 动态更新渲染器设置
+        this.renderer.lowFPS = false
+        this.preview.lowFPS = false
+        this.preview.smoothSteps = 4
+        this.renderer.smoothSteps = 4
+      }
+    })
+
+    this.stylusProfile = "default"
+    this.setStylusProfile = (name) => {
+      this.stylusProfile = name
+      this.stylusAdapter?.useProfile?.(name)
+    }
+
+    // 🛠 Debug 日志输出 pointer event
+    this._debugEvent = (e) => {
+      console.log("PointerEvent:", {
+        type: e.type,
+        pointerType: e.pointerType,
+        pressure: e.pressure,
+        tiltX: e.tiltX,
+        tiltY: e.tiltY,
+        x: e.clientX,
+        y: e.clientY
+      })
+    }
+
+    const originalDown = this._onPointerDown?.bind(this)
+    this._onPointerDown = (e) => {
+      this._debugEvent(e)
+      if (this.inputMode === "pen" && e.pointerType !== "pen") return
+      const pressure = e.pressure > 0 ? e.pressure : 0.5
+      e._patchedPressure = pressure
+      originalDown?.(e)
+    }
+
+    // 不需要再次绑定绘图事件，因为构造函数中已经绑定了
+    // this._bindEvents()
+
+    // 只在这里绑定UI事件，避免重复绑定
+    bindUIEvents({ drawingBoard: this })
+    this.logger?.info?.("初始化完成")
   }
 }
 
