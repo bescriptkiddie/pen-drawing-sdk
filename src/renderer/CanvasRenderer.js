@@ -113,7 +113,7 @@ export class CanvasRenderer {
    * @private
    */
   _renderOptimizedStroke(stroke, points, pressures) {
-    // 优化的点采样策略 - 减少过度简化，保留更多关键点
+    // 使用采样点策略但保留更多关键点
     const simplifiedPoints = this._sampleKeyPoints(points)
     const simplifiedPressures = this._resamplePressures(
       pressures,
@@ -176,11 +176,11 @@ export class CanvasRenderer {
       const curvatureAdaptiveThreshold =
         this.distanceThreshold * (0.2 + 0.8 * Math.min(1, (1 + dotProduct) / 2))
 
-      // 保留点的条件更宽松，确保曲线更平滑
+      // 保留点的条件
       if (
         angleChange > this.angleThreshold || // 角度变化大于阈值
         distFromLast > curvatureAdaptiveThreshold || // 距离大于自适应阈值
-        i - lastAddedIndex > 4 // 最多跳过4个点
+        i - lastAddedIndex > 2 // 最多跳过2个点，比之前的4个更保守
       ) {
         result.push(curr)
         lastAddedIndex = i
