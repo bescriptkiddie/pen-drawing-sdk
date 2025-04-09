@@ -31,6 +31,13 @@ export class CanvasRenderer {
     this.distanceThreshold = options.distanceThreshold ?? 6 // 距离阈值，较小的值保留更多点
     this.momentumFactor = options.momentumFactor ?? 0.5 // 贝塞尔曲线动量因子，影响曲线的"惯性"
     this.curveFactor = options.curveFactor ?? 0.35 // 曲线平滑因子，值越大曲线越圆滑
+
+    // 添加低帧率专用参数
+    this.lowFPSAngleThreshold = options.lowFPSAngleThreshold ?? 0.04 // 更敏感的角度阈值
+    this.lowFPSDistanceThreshold = options.lowFPSDistanceThreshold ?? 4 // 更短的距离阈值
+    this.lowFPSMaxSkipPoints = options.lowFPSMaxSkipPoints ?? 2 // 低帧率下最多跳过2点
+    this.lowFPSMomentumFactor = options.lowFPSMomentumFactor ?? 0.6 // 更强的曲线平滑
+    this.lowFPSCurveFactor = options.lowFPSCurveFactor ?? 0.45 // 更强的曲线因子
   }
 
   /**
@@ -113,11 +120,21 @@ export class CanvasRenderer {
    * @private
    */
   _renderOptimizedStroke(stroke, points, pressures) {
-    // 使用采样点策略但保留更多关键点
-    const simplifiedPoints = this._sampleKeyPoints(points)
+    // 1. 低帧率预平滑 (新增)
+    let processedPoints = points
+    let processedPressures = pressures
+
+    if (this.lowFPS) {
+      const smoothed = this._preSmoothPointsForLowFPS(points, pressures)
+      processedPoints = smoothed.points
+      processedPressures = smoothed.pressures
+    }
+
+    // 2. 采样
+    const simplifiedPoints = this._sampleKeyPoints(processedPoints)
     const simplifiedPressures = this._resamplePressures(
-      pressures,
-      points,
+      processedPressures,
+      processedPoints,
       simplifiedPoints
     )
 
@@ -126,6 +143,84 @@ export class CanvasRenderer {
 
     this.ctx.beginPath()
     this._renderSmoothedPath(simplifiedPoints, simplifiedPressures, stroke)
+  }
+
+  /**
+   * 低帧率下的点预平滑
+   *
+   * 在低帧率模式下，对点进行预平滑处理以减少抖动
+   * 使用自适应加权平滑算法，根据转弯程度调整平滑强度
+   *
+   * @param {Array<{x,y}>} points - 原始点数组
+   * @param {Array<number>} pressures - 原始压力值数组
+   * @returns {Object} 包含平滑后的点和压力值
+   * @private
+   */
+  _preSmoothPointsForLowFPS(points, pressures) {
+    // 仅在低帧率模式下、点数足够时应用
+    if (!this.lowFPS || points.length <= 4) {
+      return { points, pressures }
+    }
+
+    const smoothedPoints = []
+    const smoothedPressures = []
+
+    // 保留首尾点不变
+    smoothedPoints.push(points[0])
+    smoothedPressures.push(pressures[0])
+
+    // 对中间点应用平滑
+    for (let i = 1; i < points.length - 1; i++) {
+      const prev = points[i - 1]
+      const curr = points[i]
+      const next = points[i + 1]
+
+      // 计算当前点与前后点的向量
+      const v1 = { x: curr.x - prev.x, y: curr.y - prev.y }
+      const v2 = { x: next.x - curr.x, y: next.y - curr.y }
+      const len1 = Math.sqrt(v1.x * v1.x + v1.y * v1.y) || 0.001
+      const len2 = Math.sqrt(v2.x * v2.x + v2.y * v2.y) || 0.001
+
+      // 归一化向量
+      const u1 = { x: v1.x / len1, y: v1.y / len1 }
+      const u2 = { x: v2.x / len2, y: v2.y / len2 }
+
+      // 计算点积，判断角度变化
+      const dotProduct = u1.x * u2.x + u1.y * u2.y
+
+      // 加权平均计算平滑点
+      // 中心点权重为2，前后点权重为1
+      const smoothX = (prev.x + curr.x * 2 + next.x) / 4
+      const smoothY = (prev.y + curr.y * 2 + next.y) / 4
+
+      // 根据角度变化调整平滑强度
+      // 转弯处(角度变化大)保留更多原始信息
+      if (dotProduct < 0.7) {
+        // 大约45度以上的转弯
+        // 转弯点使用轻度平滑
+        smoothedPoints.push({
+          x: (curr.x * 3 + smoothX) / 4, // 75%原始 + 25%平滑
+          y: (curr.y * 3 + smoothY) / 4
+        })
+      } else {
+        // 非转弯点使用标准平滑
+        smoothedPoints.push({
+          x: smoothX,
+          y: smoothY
+        })
+      }
+
+      // 平滑压力值
+      const smoothPressure =
+        (pressures[i - 1] + pressures[i] * 2 + pressures[i + 1]) / 4
+      smoothedPressures.push(smoothPressure)
+    }
+
+    // 保留最后一个点
+    smoothedPoints.push(points[points.length - 1])
+    smoothedPressures.push(pressures[pressures.length - 1])
+
+    return { points: smoothedPoints, pressures: smoothedPressures }
   }
 
   /**
@@ -147,6 +242,15 @@ export class CanvasRenderer {
 
     const result = [points[0]]
     let lastAddedIndex = 0
+
+    // 根据帧率模式选择参数
+    const angleThreshold = this.lowFPS
+      ? this.lowFPSAngleThreshold
+      : this.angleThreshold
+    const distanceThreshold = this.lowFPS
+      ? this.lowFPSDistanceThreshold
+      : this.distanceThreshold
+    const maxSkipPoints = this.lowFPS ? this.lowFPSMaxSkipPoints : 4
 
     for (let i = 1; i < points.length - 1; i++) {
       const prev = points[lastAddedIndex]
@@ -174,13 +278,13 @@ export class CanvasRenderer {
 
       // 根据曲率调整距离阈值 - 曲率大时降低阈值保留更多点
       const curvatureAdaptiveThreshold =
-        this.distanceThreshold * (0.2 + 0.8 * Math.min(1, (1 + dotProduct) / 2))
+        distanceThreshold * (0.2 + 0.8 * Math.min(1, (1 + dotProduct) / 2))
 
       // 保留点的条件
       if (
-        angleChange > this.angleThreshold || // 角度变化大于阈值
+        angleChange > angleThreshold || // 角度变化大于阈值
         distFromLast > curvatureAdaptiveThreshold || // 距离大于自适应阈值
-        i - lastAddedIndex > 2 // 最多跳过2个点，比之前的4个更保守
+        i - lastAddedIndex > maxSkipPoints // 最多跳过maxSkipPoints个点
       ) {
         result.push(curr)
         lastAddedIndex = i
@@ -335,9 +439,14 @@ export class CanvasRenderer {
         const p1 = points[i + 1]
         const p2 = points[i + 2]
 
+        // 选择合适的动量因子
+        const momentumFactor = this.lowFPS
+          ? this.lowFPSMomentumFactor
+          : this.momentumFactor
+
         // 使用动量控制点计算
         const cp = getMomentumControlPoint(p0, p1, p2, {
-          momentumFactor: this.momentumFactor
+          momentumFactor: momentumFactor
         })
 
         this.ctx.quadraticCurveTo(cp.cx, cp.cy, p2.x, p2.y)
@@ -360,6 +469,15 @@ export class CanvasRenderer {
         // 检测是否是最后一段（用于特殊终点处理）
         const isLastSegment = i >= points.length - 4
 
+        // 选择合适的动量和曲线因子
+        const momentumFactor = this.lowFPS
+          ? this.lowFPSMomentumFactor
+          : this.momentumFactor
+        const curveFactor = this.lowFPS
+          ? this.lowFPSCurveFactor
+          : this.curveFactor
+        const speedThreshold = this.lowFPS ? 15 : 20 // 低帧率时降低速度阈值
+
         // 急转弯特殊处理
         if (dot < 0) {
           const { cp1x, cp1y, cp2x, cp2y } = getFinalSegmentControlPoints(
@@ -367,8 +485,8 @@ export class CanvasRenderer {
             p1,
             p2,
             {
-              momentumFactor: this.momentumFactor,
-              speedThreshold: 20,
+              momentumFactor: momentumFactor,
+              speedThreshold: speedThreshold,
               endFactor: 0.2,
               isLastSegment
             }
@@ -385,9 +503,9 @@ export class CanvasRenderer {
             p1,
             p2,
             {
-              momentumFactor: 0.4,
-              speedThreshold: 25,
-              endFactor: 0.15,
+              momentumFactor: this.lowFPS ? 0.45 : 0.4,
+              speedThreshold: speedThreshold,
+              endFactor: this.lowFPS ? 0.18 : 0.15,
               isLastSegment // 传递是否是最后一段的标志
             }
           )
@@ -403,8 +521,8 @@ export class CanvasRenderer {
             p2,
             p3,
             {
-              controlFactor: this.curveFactor,
-              speedThreshold: 25
+              controlFactor: curveFactor,
+              speedThreshold: speedThreshold
             }
           )
 
